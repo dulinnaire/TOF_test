@@ -22,15 +22,13 @@ static const uint8_t CRC_TABLE[256] = {
     0xf4, 0xb9, 0x6e, 0x23, 0x8d, 0xc0, 0x17, 0x5a, 0x06, 0x4b, 0x9c, 0xd1, 0x7f, 0x32, 0xe5, 0xa8
 }; //用于crc校验的数组
 
-char USART_RX_BUF[USART_REC_LEN]; //接收缓冲,最大USART_REC_LEN个字节.
-uint16_t point1;
+uint16_t distance = 0;
+uint8_t usart1_receive_buf[1]; //串口1接收中断数据存放的缓冲区
+uint32_t time_now = 0, last_time = 0, interval = 0;
+
 LiDARFrameTypeDef pack_data; //雷达接收的数据储存在这个变量之中
-extern uint16_t receive_cnt;
-extern uint16_t distance;
 
-extern uint8_t usart1_receive_buf[1]; //串口1接收中断数据存放的缓冲区
-
-extern uint32_t time_now, last_time, interval;
+void data_process(void);
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef* huart) //接收回调函数
 {
@@ -89,7 +87,6 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef* huart) //接收回调函数
                         if (pack_data.crc8 == crc) //校验正确
                         {
                             data_process(); //接收到一帧且校验正确可以进行数据处理
-                            receive_cnt++; //输出接收到正确数据的次数
                         } else {
                             //校验不正确
                         }
@@ -114,10 +111,8 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef* huart) //接收回调函数
                     }
                     break;
                 case 1:
-                    //receive_cnt = temp_data;
                     if (temp_data == VERLEN) //测量的点数，目前固定
                     {
-                        //receive_cnt++;
                         pack_data.ver_len = temp_data;
                         state++;
                         crc = CRC_TABLE[(crc ^ temp_data) & 0xff];
@@ -177,13 +172,14 @@ void data_process(void) //数据处理函数，完成一帧之后可进行数据
     }
     if (++cnt == times) //100个数据帧计算一次距离
     {
-        time_now = HAL_GetTick();
-        interval = time_now - last_time;
-        last_time = time_now;
+        // time_now = HAL_GetTick();
+        // interval = time_now - last_time;
+        // last_time = time_now;
+
         distance = sum / count;
+
         sum = 0;
         count = 0;
         cnt = 0;
     }
 }
-

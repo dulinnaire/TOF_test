@@ -61,7 +61,6 @@ void Error_Handler(void);
 #define LASER_GPIO_Port GPIOC
 #define KEY_Pin GPIO_PIN_0
 #define KEY_GPIO_Port GPIOA
-#define KEY_EXTI_IRQn EXTI0_IRQn
 
 /* USER CODE BEGIN Private defines */
 

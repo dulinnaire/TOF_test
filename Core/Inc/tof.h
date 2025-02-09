@@ -8,13 +8,8 @@
 #include "stm32f4xx.h"
 #include "usart.h"
 
-extern uint16_t receive_cnt;
-extern uint16_t distance;
-
 #define USART_REC_LEN 200 //定义最大接收字节数 200
-
-extern char USART_RX_BUF[USART_REC_LEN]; //接收缓冲,最大USART_REC_LEN个字节.末字节为换行符
-extern uint16_t USART_RX_STA; //接收状态标记
+#define TOF_FRAME_LEN 47 //一帧数据的长度
 
 #define ANGLE_PER_FRAME 12
 #define HEADER 0x54
@@ -37,10 +32,13 @@ typedef struct __attribute__((packed)) Pack_Data {
     uint8_t crc8;
 } LiDARFrameTypeDef;
 
+extern uint8_t usart1_receive_buf[1]; //串口1接收中断数据存放的缓冲区
+extern uint32_t time_now, last_time, interval;
+
+extern LiDARFrameTypeDef pack_data; //雷达接收的数据储存在这个变量之中
+
+extern uint16_t distance;
+
 extern UART_HandleTypeDef huart1;
-
-extern char rxdatabuffer;
-void data_process(void);
-
 
 #endif //TOF_H
