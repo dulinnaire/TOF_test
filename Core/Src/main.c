@@ -114,6 +114,7 @@ int main(void) {
     can_tx_header.DLC = 2;
     can_tx_header.TransmitGlobalTime = DISABLE;
 
+    HAL_CAN_Start(&hcan1);
     HAL_TIM_Base_Start_IT(&htim10);
     // HAL_GPIO_WritePin(LASER_GPIO_Port, LASER_Pin, GPIO_PIN_RESET);
     HAL_UART_Receive_IT(&huart1, usart1_receive_buf, sizeof(usart1_receive_buf));
