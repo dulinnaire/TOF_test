@@ -22,38 +22,38 @@ static const uint8_t CRC_TABLE[256] = {
     0xf4, 0xb9, 0x6e, 0x23, 0x8d, 0xc0, 0x17, 0x5a, 0x06, 0x4b, 0x9c, 0xd1, 0x7f, 0x32, 0xe5, 0xa8
 }; //用于crc校验的数组
 
-uint16_t distance = 0;
+uint16_t distance_right = 0;
 uint8_t usart1_receive_buf[1]; //串口1接收中断数据存放的缓冲区
 uint32_t time_now = 0, last_time = 0, interval = 0;
 
-LiDARFrameTypeDef pack_data; //雷达接收的数据储存在这个变量之中
+LiDARFrameTypeDef pack_data_right; //雷达接收的数据储存在这个变量之中
 
 void data_process(void);
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef* huart) //接收回调函数
 {
-    static uint8_t state = 0; //状态位
-    static uint8_t crc = 0; //校验和
-    static uint8_t cnt = 0; //用于一帧12个点的计数
-    uint8_t temp_data;
     if (huart->Instance == USART1) {
+        static uint8_t state = 0; //状态位
+        static uint8_t crc = 0; //校验和
+        static uint8_t cnt = 0; //用于一帧12个点的计数
+        uint8_t temp_data;
         temp_data = usart1_receive_buf[0];
         if (state > 5) {
             if (state < 42) {
                 if (state % 3 == 0) //一帧数据中的序号为6,9.....39的数据，距离值低8位
                 {
-                    pack_data.point[cnt].distance = (uint16_t)temp_data;
+                    pack_data_right.point[cnt].distance = (uint16_t)temp_data;
                     state++;
                     crc = CRC_TABLE[(crc ^ temp_data) & 0xff];
                 } else if (state % 3 == 1) //一帧数据中的序号为7,10.....40的数据，距离值高8位
                 {
-                    pack_data.point[cnt].distance =
-                        ((uint16_t)temp_data << 8) + pack_data.point[cnt].distance;
+                    pack_data_right.point[cnt].distance =
+                        ((uint16_t)temp_data << 8) + pack_data_right.point[cnt].distance;
                     state++;
                     crc = CRC_TABLE[(crc ^ temp_data) & 0xff];
                 } else //一帧数据中的序号为8,11.....41的数据，置信度
                 {
-                    pack_data.point[cnt].intensity = temp_data;
+                    pack_data_right.point[cnt].intensity = temp_data;
                     cnt++;
                     state++;
                     crc = CRC_TABLE[(crc ^ temp_data) & 0xff];
@@ -61,36 +61,35 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef* huart) //接收回调函数
             } else {
                 switch (state) {
                     case 42:
-                        pack_data.end_angle = (uint16_t)temp_data; //结束角度低8位
+                        pack_data_right.end_angle = (uint16_t)temp_data; //结束角度低8位
                         state++;
                         crc = CRC_TABLE[(crc ^ temp_data) & 0xff];
                         break;
                     case 43:
-                        pack_data.end_angle =
-                            ((uint16_t)temp_data << 8) + pack_data.end_angle; //结束角度高8位
+                        pack_data_right.end_angle =
+                            ((uint16_t)temp_data << 8) + pack_data_right.end_angle; //结束角度高8位
                         state++;
                         crc = CRC_TABLE[(crc ^ temp_data) & 0xff];
                         break;
                     case 44:
-                        pack_data.timestamp = (uint16_t)temp_data; //时间戳低8位
+                        pack_data_right.timestamp = (uint16_t)temp_data; //时间戳低8位
                         state++;
                         crc = CRC_TABLE[(crc ^ temp_data) & 0xff];
                         break;
                     case 45:
-                        pack_data.timestamp =
-                            ((uint16_t)temp_data << 8) + pack_data.timestamp; //时间戳高8位
+                        pack_data_right.timestamp =
+                            ((uint16_t)temp_data << 8) + pack_data_right.timestamp; //时间戳高8位
                         state++;
                         crc = CRC_TABLE[(crc ^ temp_data) & 0xff];
                         break;
                     case 46:
-                        pack_data.crc8 = temp_data; //雷达传来的校验和
-                        if (pack_data.crc8 == crc) //校验正确
+                        pack_data_right.crc8 = temp_data; //雷达传来的校验和
+                        if (pack_data_right.crc8 == crc) //校验正确
                         {
                             data_process(); //接收到一帧且校验正确可以进行数据处理
                         } else {
                             //校验不正确
                         }
-                        //memset(&Pack_Data,0,sizeof(Pack_Data)*);//清零
                         crc = 0;
                         state = 0;
                         cnt = 0; //复位
@@ -103,7 +102,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef* huart) //接收回调函数
                 case 0:
                     if (temp_data == HEADER) //头固定
                     {
-                        pack_data.header = temp_data;
+                        pack_data_right.header = temp_data;
                         state++;
                         crc = CRC_TABLE[(crc ^ temp_data) & 0xff]; //开始进行校验
                     } else {
@@ -113,7 +112,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef* huart) //接收回调函数
                 case 1:
                     if (temp_data == VERLEN) //测量的点数，目前固定
                     {
-                        pack_data.ver_len = temp_data;
+                        pack_data_right.ver_len = temp_data;
                         state++;
                         crc = CRC_TABLE[(crc ^ temp_data) & 0xff];
                     } else {
@@ -121,24 +120,25 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef* huart) //接收回调函数
                     }
                     break;
                 case 2:
-                    pack_data.temperature =
+                    pack_data_right.temperature =
                         (uint16_t)temp_data; //温度低8位，一共16位ADC，0--4096，无量纲
                     state++;
                     crc = CRC_TABLE[(crc ^ temp_data) & 0xff];
                     break;
                 case 3:
-                    pack_data.temperature =
-                        ((uint16_t)temp_data << 8) + pack_data.temperature; //温度高8位
+                    pack_data_right.temperature =
+                        ((uint16_t)temp_data << 8) + pack_data_right.temperature; //温度高8位
                     state++;
                     crc = CRC_TABLE[(crc ^ temp_data) & 0xff];
                     break;
                 case 4:
-                    pack_data.start_angle = (uint16_t)temp_data; //开始角度低8位，放大了100倍
+                    pack_data_right.start_angle = (uint16_t)temp_data; //开始角度低8位，放大了100倍
                     state++;
                     crc = CRC_TABLE[(crc ^ temp_data) & 0xff];
                     break;
                 case 5:
-                    pack_data.start_angle = ((uint16_t)temp_data << 8) + pack_data.start_angle;
+                    pack_data_right.start_angle =
+                        ((uint16_t)temp_data << 8) + pack_data_right.start_angle;
                     state++;
                     crc = CRC_TABLE[(crc ^ temp_data) & 0xff];
                     break;
@@ -150,11 +150,9 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef* huart) //接收回调函数
             &huart1,
             usart1_receive_buf,
             sizeof(usart1_receive_buf)
-        ); //串口5回调函数执行完毕之后，需要再次开启接收中断等待下一次接收中断的发生
+        ); //串口1回调函数执行完毕之后，需要再次开启接收中断等待下一次接收中断的发生
     }
 }
-
-int times = 1;
 
 void data_process(void) //数据处理函数，完成一帧之后可进行数据处理
 {
@@ -164,22 +162,19 @@ void data_process(void) //数据处理函数，完成一帧之后可进行数据
     static uint32_t sum = 0;
     for (int i = 0; i < 12; i++) //12个点取平均
     {
-        if (pack_data.point[i].distance != 0) //去除0的点
+        if (pack_data_right.point[i].distance != 0) //去除0的点
         {
             count++;
-            sum += pack_data.point[i].distance;
+            sum += pack_data_right.point[i].distance;
         }
     }
-    if (++cnt == times) //100个数据帧计算一次距离
-    {
         // time_now = HAL_GetTick();
         // interval = time_now - last_time;
         // last_time = time_now;
 
-        distance = sum / count;
+        distance_right = sum / count;
 
         sum = 0;
         count = 0;
         cnt = 0;
-    }
 }
