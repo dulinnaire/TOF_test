@@ -95,21 +95,6 @@ int main(void)
   MX_TIM10_Init();
   MX_USART6_UART_Init();
   /* USER CODE BEGIN 2 */
-    // CAN_FilterTypeDef filter_config;
-    // filter_config.FilterIdHigh = 0x0000;
-    // filter_config.FilterIdLow = 0x0000;
-    // filter_config.FilterMaskIdHigh = 0x0000;
-    // filter_config.FilterMaskIdLow = 0x0000;
-    // filter_config.FilterFIFOAssignment = CAN_FILTER_FIFO0;
-    // filter_config.FilterBank = 0;
-    // filter_config.FilterMode = CAN_FILTERMODE_IDMASK;
-    // filter_config.FilterScale = CAN_FILTERSCALE_16BIT;
-    // filter_config.FilterActivation = CAN_FILTER_ENABLE;
-    // filter_config.SlaveStartFilterBank = 0;
-    // HAL_CAN_ConfigFilter(&hcan1, &filter_config);
-    // HAL_CAN_Start(&hcan1);
-    // HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING);
-
     can_tx_header.StdId = 0x666; // tof距离信息报文ID
     can_tx_header.ExtId = 0;
     can_tx_header.IDE = CAN_ID_STD;
