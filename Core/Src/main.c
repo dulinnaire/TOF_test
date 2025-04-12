@@ -98,7 +98,7 @@ int main(void) {
     can_tx_header.ExtId = 0;
     can_tx_header.IDE = CAN_ID_STD;
     can_tx_header.RTR = CAN_RTR_DATA;
-    can_tx_header.DLC = 4;
+    can_tx_header.DLC = 8;
     can_tx_header.TransmitGlobalTime = DISABLE;
 
     HAL_CAN_Start(&hcan1);

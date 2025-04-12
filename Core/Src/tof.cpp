@@ -33,6 +33,8 @@ LiDARFrameTypeDef pack_data_left; // 左侧tof数据解包
 void data_process_right(void);
 void data_process_left(void);
 
+// 板上UART2 4pin: USART1 右侧tof
+// 板上UART1 3pin: USART6 左侧tof
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef* huart) //接收回调函数
 {
     uint8_t temp_data;
