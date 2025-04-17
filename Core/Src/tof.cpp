@@ -41,6 +41,8 @@ void TOF::init(void) {
 
 void TOF::reset(void) {
     distance = 0;
+    point_count = 0;
+    total = 0;
 }
 
 void TOF::handle(void) {
@@ -61,7 +63,15 @@ void TOF::handle(void) {
             sum += rx_data_pack_.point[i].distance;
         }
     }
-    distance = count == 0 ? 0 : sum / count;
+    // distance = count == 0 ? 0 : sum / count;
+    point_count++;
+    total += count == 0 ? 0 : sum / count;
+
+    if (point_count == 3) {
+        distance = total / 3;
+        point_count = 0;
+        total = 0;
+    }
 }
 
 bool TOF::crc_check() {

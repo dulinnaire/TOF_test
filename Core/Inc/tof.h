@@ -59,6 +59,9 @@ private:
     volatile uint8_t rx_len_;
 
     uint16_t distance;
+
+    uint8_t point_count;
+    uint32_t total;
 };
 
 #endif //TOF_H
