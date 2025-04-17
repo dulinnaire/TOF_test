@@ -11,9 +11,6 @@
 TOF tof_left(&huart6);
 TOF tof_right(&huart1);
 
-// extern uint16_t distance_right; // 距离，16位，单位mm
-// extern uint16_t distance_left;
-
 uint32_t can_tx_mailbox;
 uint8_t can_tx_data[8] = { 0 };
 extern CAN_TxHeaderTypeDef can_tx_header;

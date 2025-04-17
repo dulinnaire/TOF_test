@@ -61,12 +61,4 @@ private:
     uint16_t distance;
 };
 
-// extern uint8_t usart1_receive_buf[1]; //串口1接收中断数据存放的缓冲区
-// extern uint32_t time_now, last_time, interval;
-//
-// extern LiDARFrameTypeDef pack_data_right; //雷达接收的数据储存在这个变量之中
-//
-// extern uint16_t distance_right;
-
-
 #endif //TOF_H
