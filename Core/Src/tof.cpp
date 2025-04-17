@@ -1,7 +1,5 @@
-//
-// Created by 81301 on 2025/1/16.
-//
 #include "tof.h"
+#include <string.h>
 
 static const uint8_t CRC_TABLE[256] = {
     0x00, 0x4d, 0x9a, 0xd7, 0x79, 0x34, 0xe3, 0xae, 0xf2, 0xbf, 0x68, 0x25, 0x8b, 0xc6, 0x11, 0x5c,
@@ -22,303 +20,383 @@ static const uint8_t CRC_TABLE[256] = {
     0xf4, 0xb9, 0x6e, 0x23, 0x8d, 0xc0, 0x17, 0x5a, 0x06, 0x4b, 0x9c, 0xd1, 0x7f, 0x32, 0xe5, 0xa8
 }; //用于crc校验的数组
 
-uint16_t distance_right = 0, distance_left = 0;
-uint8_t usart1_receive_buf[1]; // 串口1接收中断数据存放的缓冲区
-uint8_t usart6_receive_buf[1]; // 串口6接收中断数据存放的缓冲区
-uint32_t time_now = 0, last_time = 0, interval = 0;
+// uint16_t distance_right = 0, distance_left = 0;
+// uint8_t usart1_receive_buf[1]; // 串口1接收中断数据存放的缓冲区
+// uint8_t usart6_receive_buf[1]; // 串口6接收中断数据存放的缓冲区
+// uint32_t time_now = 0, last_time = 0, interval = 0;
 
-LiDARFrameTypeDef pack_data_right; // 右侧tof数据解包
-LiDARFrameTypeDef pack_data_left; // 左侧tof数据解包
+// LiDARFrameTypeDef pack_data_right; // 右侧tof数据解包
+// LiDARFrameTypeDef pack_data_left; // 左侧tof数据解包
 
-void data_process_right(void);
-void data_process_left(void);
+// void data_process_right(void);
+// void data_process_left(void);
 
 // 板上UART2 4pin: USART1 右侧tof
 // 板上UART1 3pin: USART6 左侧tof
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef* huart) //接收回调函数
-{
-    uint8_t temp_data;
-    if (huart->Instance == USART1) {
-        static uint8_t state_right = 0; //状态位
-        static uint8_t crc_right = 0; //校验和
-        static uint8_t cnt_right = 0; //用于一帧12个点的计数
-        temp_data = usart1_receive_buf[0];
-        if (state_right > 5) {
-            if (state_right < 42) {
-                if (state_right % 3 == 0) //一帧数据中的序号为6,9.....39的数据，距离值低8位
-                {
-                    pack_data_right.point[cnt_right].distance = (uint16_t)temp_data;
-                    state_right++;
-                    crc_right = CRC_TABLE[(crc_right ^ temp_data) & 0xff];
-                } else if (state_right % 3 == 1) //一帧数据中的序号为7,10.....40的数据，距离值高8位
-                {
-                    pack_data_right.point[cnt_right].distance =
-                        ((uint16_t)temp_data << 8) + pack_data_right.point[cnt_right].distance;
-                    state_right++;
-                    crc_right = CRC_TABLE[(crc_right ^ temp_data) & 0xff];
-                } else //一帧数据中的序号为8,11.....41的数据，置信度
-                {
-                    pack_data_right.point[cnt_right].intensity = temp_data;
-                    cnt_right++;
-                    state_right++;
-                    crc_right = CRC_TABLE[(crc_right ^ temp_data) & 0xff];
-                }
-            } else {
-                switch (state_right) {
-                    case 42:
-                        pack_data_right.end_angle = (uint16_t)temp_data; //结束角度低8位
-                        state_right++;
-                        crc_right = CRC_TABLE[(crc_right ^ temp_data) & 0xff];
-                        break;
-                    case 43:
-                        pack_data_right.end_angle =
-                            ((uint16_t)temp_data << 8) + pack_data_right.end_angle; //结束角度高8位
-                        state_right++;
-                        crc_right = CRC_TABLE[(crc_right ^ temp_data) & 0xff];
-                        break;
-                    case 44:
-                        pack_data_right.timestamp = (uint16_t)temp_data; //时间戳低8位
-                        state_right++;
-                        crc_right = CRC_TABLE[(crc_right ^ temp_data) & 0xff];
-                        break;
-                    case 45:
-                        pack_data_right.timestamp =
-                            ((uint16_t)temp_data << 8) + pack_data_right.timestamp; //时间戳高8位
-                        state_right++;
-                        crc_right = CRC_TABLE[(crc_right ^ temp_data) & 0xff];
-                        break;
-                    case 46:
-                        pack_data_right.crc8 = temp_data; //雷达传来的校验和
-                        if (pack_data_right.crc8 == crc_right) //校验正确
-                        {
-                            data_process_right(); //接收到一帧且校验正确可以进行数据处理
-                        } else {
-                            //校验不正确
-                        }
-                        crc_right = 0;
-                        state_right = 0;
-                        cnt_right = 0; //复位
-                    default:
-                        break;
-                }
-            }
-        } else {
-            switch (state_right) {
-                case 0:
-                    if (temp_data == HEADER) //头固定
-                    {
-                        pack_data_right.header = temp_data;
-                        state_right++;
-                        crc_right = CRC_TABLE[(crc_right ^ temp_data) & 0xff]; //开始进行校验
-                    } else {
-                        state_right = 0, crc_right = 0;
-                    }
-                    break;
-                case 1:
-                    if (temp_data == VERLEN) //测量的点数，目前固定
-                    {
-                        pack_data_right.ver_len = temp_data;
-                        state_right++;
-                        crc_right = CRC_TABLE[(crc_right ^ temp_data) & 0xff];
-                    } else {
-                        state_right = 0, crc_right = 0;
-                    }
-                    break;
-                case 2:
-                    pack_data_right.temperature =
-                        (uint16_t)temp_data; //温度低8位，一共16位ADC，0--4096，无量纲
-                    state_right++;
-                    crc_right = CRC_TABLE[(crc_right ^ temp_data) & 0xff];
-                    break;
-                case 3:
-                    pack_data_right.temperature =
-                        ((uint16_t)temp_data << 8) + pack_data_right.temperature; //温度高8位
-                    state_right++;
-                    crc_right = CRC_TABLE[(crc_right ^ temp_data) & 0xff];
-                    break;
-                case 4:
-                    pack_data_right.start_angle = (uint16_t)temp_data; //开始角度低8位，放大了100倍
-                    state_right++;
-                    crc_right = CRC_TABLE[(crc_right ^ temp_data) & 0xff];
-                    break;
-                case 5:
-                    pack_data_right.start_angle =
-                        ((uint16_t)temp_data << 8) + pack_data_right.start_angle;
-                    state_right++;
-                    crc_right = CRC_TABLE[(crc_right ^ temp_data) & 0xff];
-                    break;
-                default:
-                    break;
-            }
-        }
-        HAL_UART_Receive_IT(
-            &huart1,
-            usart1_receive_buf,
-            sizeof(usart1_receive_buf)
-        ); //串口1回调函数执行完毕之后，需要再次开启接收中断等待下一次接收中断的发生
-    } else if (huart->Instance == USART6) {
-        static uint8_t state_left = 0; //状态位
-        static uint8_t crc_left = 0; //校验和
-        static uint8_t cnt_left = 0; //用于一帧12个点的计数
-        temp_data = usart6_receive_buf[0];
-        if (state_left > 5) {
-            if (state_left < 42) {
-                if (state_left % 3 == 0) //一帧数据中的序号为6,9.....39的数据，距离值低8位
-                {
-                    pack_data_left.point[cnt_left].distance = (uint16_t)temp_data;
-                    state_left++;
-                    crc_left = CRC_TABLE[(crc_left ^ temp_data) & 0xff];
-                } else if (state_left % 3 == 1) //一帧数据中的序号为7,10.....40的数据，距离值高8位
-                {
-                    pack_data_left.point[cnt_left].distance =
-                        ((uint16_t)temp_data << 8) + pack_data_left.point[cnt_left].distance;
-                    state_left++;
-                    crc_left = CRC_TABLE[(crc_left ^ temp_data) & 0xff];
-                } else //一帧数据中的序号为8,11.....41的数据，置信度
-                {
-                    pack_data_left.point[cnt_left].intensity = temp_data;
-                    cnt_left++;
-                    state_left++;
-                    crc_left = CRC_TABLE[(crc_left ^ temp_data) & 0xff];
-                }
-            } else {
-                switch (state_left) {
-                    case 42:
-                        pack_data_left.end_angle = (uint16_t)temp_data; //结束角度低8位
-                        state_left++;
-                        crc_left = CRC_TABLE[(crc_left ^ temp_data) & 0xff];
-                        break;
-                    case 43:
-                        pack_data_left.end_angle =
-                            ((uint16_t)temp_data << 8) + pack_data_left.end_angle; //结束角度高8位
-                        state_left++;
-                        crc_left = CRC_TABLE[(crc_left ^ temp_data) & 0xff];
-                        break;
-                    case 44:
-                        pack_data_left.timestamp = (uint16_t)temp_data; //时间戳低8位
-                        state_left++;
-                        crc_left = CRC_TABLE[(crc_left ^ temp_data) & 0xff];
-                        break;
-                    case 45:
-                        pack_data_left.timestamp =
-                            ((uint16_t)temp_data << 8) + pack_data_left.timestamp; //时间戳高8位
-                        state_left++;
-                        crc_left = CRC_TABLE[(crc_left ^ temp_data) & 0xff];
-                        break;
-                    case 46:
-                        pack_data_left.crc8 = temp_data; //雷达传来的校验和
-                        if (pack_data_left.crc8 == crc_left) //校验正确
-                        {
-                            data_process_left(); //接收到一帧且校验正确可以进行数据处理
-                        } else {
-                            //校验不正确
-                        }
-                        crc_left = 0;
-                        state_left = 0;
-                        cnt_left = 0; //复位
-                    default:
-                        break;
-                }
-            }
-        } else {
-            switch (state_left) {
-                case 0:
-                    if (temp_data == HEADER) //头固定
-                    {
-                        pack_data_left.header = temp_data;
-                        state_left++;
-                        crc_left = CRC_TABLE[(crc_left ^ temp_data) & 0xff]; //开始进行校验
-                    } else {
-                        state_left = 0, crc_left = 0;
-                    }
-                    break;
-                case 1:
-                    if (temp_data == VERLEN) //测量的点数，目前固定
-                    {
-                        pack_data_left.ver_len = temp_data;
-                        state_left++;
-                        crc_left = CRC_TABLE[(crc_left ^ temp_data) & 0xff];
-                    } else {
-                        state_left = 0, crc_left = 0;
-                    }
-                    break;
-                case 2:
-                    pack_data_left.temperature =
-                        (uint16_t)temp_data; //温度低8位，一共16位ADC，0--4096，无量纲
-                    state_left++;
-                    crc_left = CRC_TABLE[(crc_left ^ temp_data) & 0xff];
-                    break;
-                case 3:
-                    pack_data_left.temperature =
-                        ((uint16_t)temp_data << 8) + pack_data_left.temperature; //温度高8位
-                    state_left++;
-                    crc_left = CRC_TABLE[(crc_left ^ temp_data) & 0xff];
-                    break;
-                case 4:
-                    pack_data_left.start_angle = (uint16_t)temp_data; //开始角度低8位，放大了100倍
-                    state_left++;
-                    crc_left = CRC_TABLE[(crc_left ^ temp_data) & 0xff];
-                    break;
-                case 5:
-                    pack_data_left.start_angle =
-                        ((uint16_t)temp_data << 8) + pack_data_left.start_angle;
-                    state_left++;
-                    crc_left = CRC_TABLE[(crc_left ^ temp_data) & 0xff];
-                    break;
-                default:
-                    break;
-            }
-        }
-        HAL_UART_Receive_IT(
-            &huart6,
-            usart6_receive_buf,
-            sizeof(usart6_receive_buf)
-        ); //串口6回调函数执行完毕之后，需要再次开启接收中断等待下一次接收中断的发生
+// void HAL_UART_RxCpltCallback(UART_HandleTypeDef* huart) //接收回调函数
+// {
+//     uint8_t temp_data;
+//     if (huart->Instance == USART1) {
+//         static uint8_t state_right = 0; //状态位
+//         static uint8_t crc_right = 0; //校验和
+//         static uint8_t cnt_right = 0; //用于一帧12个点的计数
+//         temp_data = usart1_receive_buf[0];
+//         if (state_right > 5) {
+//             if (state_right < 42) {
+//                 if (state_right % 3 == 0) //一帧数据中的序号为6,9.....39的数据，距离值低8位
+//                 {
+//                     pack_data_right.point[cnt_right].distance = (uint16_t)temp_data;
+//                     state_right++;
+//                     crc_right = CRC_TABLE[(crc_right ^ temp_data) & 0xff];
+//                 } else if (state_right % 3 == 1) //一帧数据中的序号为7,10.....40的数据，距离值高8位
+//                 {
+//                     pack_data_right.point[cnt_right].distance =
+//                         ((uint16_t)temp_data << 8) + pack_data_right.point[cnt_right].distance;
+//                     state_right++;
+//                     crc_right = CRC_TABLE[(crc_right ^ temp_data) & 0xff];
+//                 } else //一帧数据中的序号为8,11.....41的数据，置信度
+//                 {
+//                     pack_data_right.point[cnt_right].intensity = temp_data;
+//                     cnt_right++;
+//                     state_right++;
+//                     crc_right = CRC_TABLE[(crc_right ^ temp_data) & 0xff];
+//                 }
+//             } else {
+//                 switch (state_right) {
+//                     case 42:
+//                         pack_data_right.end_angle = (uint16_t)temp_data; //结束角度低8位
+//                         state_right++;
+//                         crc_right = CRC_TABLE[(crc_right ^ temp_data) & 0xff];
+//                         break;
+//                     case 43:
+//                         pack_data_right.end_angle =
+//                             ((uint16_t)temp_data << 8) + pack_data_right.end_angle; //结束角度高8位
+//                         state_right++;
+//                         crc_right = CRC_TABLE[(crc_right ^ temp_data) & 0xff];
+//                         break;
+//                     case 44:
+//                         pack_data_right.timestamp = (uint16_t)temp_data; //时间戳低8位
+//                         state_right++;
+//                         crc_right = CRC_TABLE[(crc_right ^ temp_data) & 0xff];
+//                         break;
+//                     case 45:
+//                         pack_data_right.timestamp =
+//                             ((uint16_t)temp_data << 8) + pack_data_right.timestamp; //时间戳高8位
+//                         state_right++;
+//                         crc_right = CRC_TABLE[(crc_right ^ temp_data) & 0xff];
+//                         break;
+//                     case 46:
+//                         pack_data_right.crc8 = temp_data; //雷达传来的校验和
+//                         if (pack_data_right.crc8 == crc_right) //校验正确
+//                         {
+//                             data_process_right(); //接收到一帧且校验正确可以进行数据处理
+//                         } else {
+//                             //校验不正确
+//                         }
+//                         crc_right = 0;
+//                         state_right = 0;
+//                         cnt_right = 0; //复位
+//                     default:
+//                         break;
+//                 }
+//             }
+//         } else {
+//             switch (state_right) {
+//                 case 0:
+//                     if (temp_data == HEADER) //头固定
+//                     {
+//                         pack_data_right.header = temp_data;
+//                         state_right++;
+//                         crc_right = CRC_TABLE[(crc_right ^ temp_data) & 0xff]; //开始进行校验
+//                     } else {
+//                         state_right = 0, crc_right = 0;
+//                     }
+//                     break;
+//                 case 1:
+//                     if (temp_data == VERLEN) //测量的点数，目前固定
+//                     {
+//                         pack_data_right.ver_len = temp_data;
+//                         state_right++;
+//                         crc_right = CRC_TABLE[(crc_right ^ temp_data) & 0xff];
+//                     } else {
+//                         state_right = 0, crc_right = 0;
+//                     }
+//                     break;
+//                 case 2:
+//                     pack_data_right.temperature =
+//                         (uint16_t)temp_data; //温度低8位，一共16位ADC，0--4096，无量纲
+//                     state_right++;
+//                     crc_right = CRC_TABLE[(crc_right ^ temp_data) & 0xff];
+//                     break;
+//                 case 3:
+//                     pack_data_right.temperature =
+//                         ((uint16_t)temp_data << 8) + pack_data_right.temperature; //温度高8位
+//                     state_right++;
+//                     crc_right = CRC_TABLE[(crc_right ^ temp_data) & 0xff];
+//                     break;
+//                 case 4:
+//                     pack_data_right.start_angle = (uint16_t)temp_data; //开始角度低8位，放大了100倍
+//                     state_right++;
+//                     crc_right = CRC_TABLE[(crc_right ^ temp_data) & 0xff];
+//                     break;
+//                 case 5:
+//                     pack_data_right.start_angle =
+//                         ((uint16_t)temp_data << 8) + pack_data_right.start_angle;
+//                     state_right++;
+//                     crc_right = CRC_TABLE[(crc_right ^ temp_data) & 0xff];
+//                     break;
+//                 default:
+//                     break;
+//             }
+//         }
+//         HAL_UART_Receive_IT(
+//             &huart1,
+//             usart1_receive_buf,
+//             sizeof(usart1_receive_buf)
+//         ); //串口1回调函数执行完毕之后，需要再次开启接收中断等待下一次接收中断的发生
+//     } else if (huart->Instance == USART6) {
+//         static uint8_t state_left = 0; //状态位
+//         static uint8_t crc_left = 0; //校验和
+//         static uint8_t cnt_left = 0; //用于一帧12个点的计数
+//         temp_data = usart6_receive_buf[0];
+//         if (state_left > 5) {
+//             if (state_left < 42) {
+//                 if (state_left % 3 == 0) //一帧数据中的序号为6,9.....39的数据，距离值低8位
+//                 {
+//                     pack_data_left.point[cnt_left].distance = (uint16_t)temp_data;
+//                     state_left++;
+//                     crc_left = CRC_TABLE[(crc_left ^ temp_data) & 0xff];
+//                 } else if (state_left % 3 == 1) //一帧数据中的序号为7,10.....40的数据，距离值高8位
+//                 {
+//                     pack_data_left.point[cnt_left].distance =
+//                         ((uint16_t)temp_data << 8) + pack_data_left.point[cnt_left].distance;
+//                     state_left++;
+//                     crc_left = CRC_TABLE[(crc_left ^ temp_data) & 0xff];
+//                 } else //一帧数据中的序号为8,11.....41的数据，置信度
+//                 {
+//                     pack_data_left.point[cnt_left].intensity = temp_data;
+//                     cnt_left++;
+//                     state_left++;
+//                     crc_left = CRC_TABLE[(crc_left ^ temp_data) & 0xff];
+//                 }
+//             } else {
+//                 switch (state_left) {
+//                     case 42:
+//                         pack_data_left.end_angle = (uint16_t)temp_data; //结束角度低8位
+//                         state_left++;
+//                         crc_left = CRC_TABLE[(crc_left ^ temp_data) & 0xff];
+//                         break;
+//                     case 43:
+//                         pack_data_left.end_angle =
+//                             ((uint16_t)temp_data << 8) + pack_data_left.end_angle; //结束角度高8位
+//                         state_left++;
+//                         crc_left = CRC_TABLE[(crc_left ^ temp_data) & 0xff];
+//                         break;
+//                     case 44:
+//                         pack_data_left.timestamp = (uint16_t)temp_data; //时间戳低8位
+//                         state_left++;
+//                         crc_left = CRC_TABLE[(crc_left ^ temp_data) & 0xff];
+//                         break;
+//                     case 45:
+//                         pack_data_left.timestamp =
+//                             ((uint16_t)temp_data << 8) + pack_data_left.timestamp; //时间戳高8位
+//                         state_left++;
+//                         crc_left = CRC_TABLE[(crc_left ^ temp_data) & 0xff];
+//                         break;
+//                     case 46:
+//                         pack_data_left.crc8 = temp_data; //雷达传来的校验和
+//                         if (pack_data_left.crc8 == crc_left) //校验正确
+//                         {
+//                             data_process_left(); //接收到一帧且校验正确可以进行数据处理
+//                         } else {
+//                             //校验不正确
+//                         }
+//                         crc_left = 0;
+//                         state_left = 0;
+//                         cnt_left = 0; //复位
+//                     default:
+//                         break;
+//                 }
+//             }
+//         } else {
+//             switch (state_left) {
+//                 case 0:
+//                     if (temp_data == HEADER) //头固定
+//                     {
+//                         pack_data_left.header = temp_data;
+//                         state_left++;
+//                         crc_left = CRC_TABLE[(crc_left ^ temp_data) & 0xff]; //开始进行校验
+//                     } else {
+//                         state_left = 0, crc_left = 0;
+//                     }
+//                     break;
+//                 case 1:
+//                     if (temp_data == VERLEN) //测量的点数，目前固定
+//                     {
+//                         pack_data_left.ver_len = temp_data;
+//                         state_left++;
+//                         crc_left = CRC_TABLE[(crc_left ^ temp_data) & 0xff];
+//                     } else {
+//                         state_left = 0, crc_left = 0;
+//                     }
+//                     break;
+//                 case 2:
+//                     pack_data_left.temperature =
+//                         (uint16_t)temp_data; //温度低8位，一共16位ADC，0--4096，无量纲
+//                     state_left++;
+//                     crc_left = CRC_TABLE[(crc_left ^ temp_data) & 0xff];
+//                     break;
+//                 case 3:
+//                     pack_data_left.temperature =
+//                         ((uint16_t)temp_data << 8) + pack_data_left.temperature; //温度高8位
+//                     state_left++;
+//                     crc_left = CRC_TABLE[(crc_left ^ temp_data) & 0xff];
+//                     break;
+//                 case 4:
+//                     pack_data_left.start_angle = (uint16_t)temp_data; //开始角度低8位，放大了100倍
+//                     state_left++;
+//                     crc_left = CRC_TABLE[(crc_left ^ temp_data) & 0xff];
+//                     break;
+//                 case 5:
+//                     pack_data_left.start_angle =
+//                         ((uint16_t)temp_data << 8) + pack_data_left.start_angle;
+//                     state_left++;
+//                     crc_left = CRC_TABLE[(crc_left ^ temp_data) & 0xff];
+//                     break;
+//                 default:
+//                     break;
+//             }
+//         }
+//         HAL_UART_Receive_IT(
+//             &huart6,
+//             usart6_receive_buf,
+//             sizeof(usart6_receive_buf)
+//         ); //串口6回调函数执行完毕之后，需要再次开启接收中断等待下一次接收中断的发生
+//     }
+// }
+
+// void data_process_right(void) //数据处理函数，完成一帧之后可进行数据处理
+// {
+//     //计算距离
+//     static uint16_t count = 0;
+//     static uint32_t sum = 0;
+//     for (int i = 0; i < 12; i++) //12个点取平均
+//     {
+//         if (pack_data_right.point[i].distance != 0) //去除0的点
+//         {
+//             count++;
+//             sum += pack_data_right.point[i].distance;
+//         }
+//     }
+//     // time_now = HAL_GetTick();
+//     // interval = time_now - last_time;
+//     // last_time = time_now;
+//
+//     distance_right = sum / count;
+//
+//     sum = 0;
+//     count = 0;
+// }
+
+// void data_process_left(void) //数据处理函数，完成一帧之后可进行数据处理
+// {
+//     //计算距离
+//     static uint16_t count = 0;
+//     static uint32_t sum = 0;
+//     for (int i = 0; i < 12; i++) //12个点取平均
+//     {
+//         if (pack_data_left.point[i].distance != 0) //去除0的点
+//         {
+//             count++;
+//             sum += pack_data_left.point[i].distance;
+//         }
+//     }
+//     // time_now = HAL_GetTick();
+//     // interval = time_now - last_time;
+//     // last_time = time_now;
+//
+//     distance_left = sum / count;
+//
+//     sum = 0;
+//     count = 0;
+// }
+
+const uint32_t tof_connect_timeout = 100;
+
+TOF::TOF(UART_HandleTypeDef* huart): huart_(huart), connect_(tof_connect_timeout) {
+    rx_len_ = 0;
+    distance = 0;
+}
+
+void TOF::init(void) {
+    rx_len_ = 0;
+    reset();
+    if (huart_ != nullptr) {
+        __HAL_UART_ENABLE_IT(huart_, UART_IT_IDLE);
+        HAL_UART_Receive_DMA(huart_, rx_buffer_, 1);
     }
 }
 
-void data_process_right(void) //数据处理函数，完成一帧之后可进行数据处理
-{
-    //计算距离
-    static uint16_t count = 0;
-    static uint32_t sum = 0;
-    for (int i = 0; i < 12; i++) //12个点取平均
-    {
-        if (pack_data_right.point[i].distance != 0) //去除0的点
-        {
-            count++;
-            sum += pack_data_right.point[i].distance;
-        }
-    }
-    // time_now = HAL_GetTick();
-    // interval = time_now - last_time;
-    // last_time = time_now;
-
-    distance_right = sum / count;
-
-    sum = 0;
-    count = 0;
+void TOF::reset(void) {
+    distance = 0;
 }
 
-void data_process_left(void) //数据处理函数，完成一帧之后可进行数据处理
-{
-    //计算距离
-    static uint16_t count = 0;
-    static uint32_t sum = 0;
-    for (int i = 0; i < 12; i++) //12个点取平均
-    {
-        if (pack_data_left.point[i].distance != 0) //去除0的点
-        {
+void TOF::handle(void) {
+    if (!connect_.check() || !pack_header_check() || !crc_check()) {
+        reset();
+        return;
+    }
+    memcpy(&rx_data_pack_, rx_data_, TOF_FRAME_LEN);
+
+    // 计算距离
+    uint16_t count = 0;
+    uint32_t sum = 0;
+    // 12个点取平均
+    for (int i = 0; i < POINT_PER_PACK; i++) {
+        // 去除0的点
+        if (rx_data_pack_.point[i].distance != 0) {
             count++;
-            sum += pack_data_left.point[i].distance;
+            sum += rx_data_pack_.point[i].distance;
         }
     }
-    // time_now = HAL_GetTick();
-    // interval = time_now - last_time;
-    // last_time = time_now;
+    distance = count == 0 ? 0 : sum / count;
+}
 
-    distance_left = sum / count;
+bool TOF::crc_check() {
+    uint8_t crc = 0;
+    for (int i = 0; i < TOF_FRAME_LEN - 1; i++) {
+        crc = CRC_TABLE[(crc ^ rx_data_[i]) & 0xff];
+    }
+    return crc == rx_data_[TOF_FRAME_LEN - 1];
+}
 
-    sum = 0;
-    count = 0;
+bool TOF::pack_header_check() {
+    return rx_data_[0] == HEADER && rx_data_[1] == VERLEN;
+}
+
+bool TOF::uart_check(UART_HandleTypeDef* huart) {
+    return huart_ == huart;
+}
+
+void TOF::rx_callback(void) {
+    rx_len_++;
+    if (huart_ != nullptr) {
+        HAL_UART_Receive_DMA(huart_, rx_buffer_ + rx_len_, 1);
+    }
+}
+
+void TOF::idle_callback(void) {
+    if (rx_len_ >= TOF_FRAME_LEN) {
+        connect_.refresh();
+        memcpy(&rx_data_, rx_buffer_ + rx_len_ - TOF_FRAME_LEN, TOF_FRAME_LEN);
+    }
+    rx_len_=0;
+    if (huart_ != nullptr) {
+        HAL_UART_AbortReceive(huart_);
+        HAL_UART_Receive_DMA(huart_, rx_buffer_, 1);
+    }
+}
+
+uint16_t TOF::get_distance() {
+    return distance;
 }

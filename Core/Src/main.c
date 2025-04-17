@@ -19,6 +19,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "can.h"
+#include "dma.h"
 #include "gpio.h"
 #include "tim.h"
 #include "usart.h"
@@ -47,8 +48,8 @@
 
 /* USER CODE BEGIN PV */
 CAN_TxHeaderTypeDef can_tx_header;
-extern uint8_t usart1_receive_buf[1]; //串口1接收中断数据存放的缓冲区
-extern uint8_t usart6_receive_buf[1]; // 串口6接收中断数据存放的缓冲区
+// extern uint8_t usart1_receive_buf[1]; //串口1接收中断数据存放的缓冲区
+// extern uint8_t usart6_receive_buf[1]; // 串口6接收中断数据存放的缓冲区
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -89,6 +90,7 @@ int main(void) {
 
     /* Initialize all configured peripherals */
     MX_GPIO_Init();
+    MX_DMA_Init();
     MX_USART1_UART_Init();
     MX_CAN1_Init();
     MX_TIM10_Init();
@@ -104,8 +106,8 @@ int main(void) {
     HAL_CAN_Start(&hcan1);
     HAL_TIM_Base_Start_IT(&htim10);
     // HAL_GPIO_WritePin(LASER_GPIO_Port, LASER_Pin, GPIO_PIN_RESET);
-    HAL_UART_Receive_IT(&huart1, usart1_receive_buf, sizeof(usart1_receive_buf));
-    HAL_UART_Receive_IT(&huart6, usart6_receive_buf, sizeof(usart6_receive_buf));
+    // HAL_UART_Receive_IT(&huart1, usart1_receive_buf, sizeof(usart1_receive_buf));
+    // HAL_UART_Receive_IT(&huart6, usart6_receive_buf, sizeof(usart6_receive_buf));
     /* USER CODE END 2 */
 
     /* Infinite loop */
