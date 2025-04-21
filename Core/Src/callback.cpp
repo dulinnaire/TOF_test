@@ -35,7 +35,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim) {
         tof_data.left_dis = tof_left.connect_.check() ? tof_left.get_distance() : 0;
         tof_data.right_dis = tof_right.connect_.check() ? tof_right.get_distance() : 0;
         memcpy(can_tx_data, &tof_data, 8);
-        if (HAL_GetTick() % 10 == 0) {
+        if (HAL_GetTick() % 5 == 0) { // 200Hz
             HAL_CAN_AddTxMessage(&hcan1, &can_tx_header, can_tx_data, &can_tx_mailbox);
         }
     }
