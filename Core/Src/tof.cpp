@@ -46,11 +46,17 @@ void TOF::reset(void) {
 }
 
 void TOF::handle(void) {
-    if (!connect_.check() || !pack_header_check() || !crc_check()) {
+    if (!connect_.check()) {
         reset();
         return;
     }
+
     memcpy(&rx_data_pack_, rx_data_, TOF_FRAME_LEN);
+    if (!pack_header_check() || !crc_check()) {
+        point_count = 0;
+        total = 0;
+        return;
+    }
 
     // 计算距离
     uint16_t count = 0;
